@@ -10,4 +10,8 @@ pub enum LedgerError {
 
     #[error("account not found: {0}")]
     AccountNotFound(Uuid),
+
+    #[error("insufficient funds in account {account_id}")]
+    InsufficientFunds { account_id: Uuid },
+
 }

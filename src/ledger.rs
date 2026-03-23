@@ -12,6 +12,9 @@ impl Ledger {
 
     pub async fn transfer(&self, req: TransferRequest) -> Result<(), LedgerError> {
         self.db.with_transaction(|mut tx| async {
+            // lock accounts in consustent uuid order to prevent deadlock
+            Db::lock_accounts(&mut tx, req.from_account.0, req.to_account.0).await?;
+
             // debit sender
             Db::apply_entry(
                 &mut tx,

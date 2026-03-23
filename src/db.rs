@@ -30,7 +30,6 @@ impl Db {
 }
 
 // transaction helper
-
 impl Db {
     pub async fn with_transaction<'a, F, Fut, T>(&self, f: F) -> Result<T, LedgerError>
     where
@@ -62,19 +61,60 @@ impl Db {
             .ok_or(LedgerError::AccountNotFound(account_id))
     }
 
+    // lock both accounts for an update within a transaction.
+    // always in uuid order to prevent deadlocks when tow concurrent
+    // transfers touch the same pair of accounts in opposite directions.
+    pub async fn lock_accounts(
+        tx: &mut Transaction<'_, Postgres>,
+        a: Uuid,
+        b: Uuid,
+    ) -> Result<(), LedgerError> {
+        // sort to ensure consistent lock ordering
+        let (first, second) = if a < b { (a, b) } else { (b, a) };
+
+        sqlx::query!(
+            "SELECT id FROM accounts WHERE  id = ANY($1) ORDER  BY id FOR    UPDATE",
+            &[first, second] as &[Uuid]
+        )
+        .fetch_all(&mut **tx)
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn apply_entry(
         tx: &mut Transaction<'_, Postgres>,
         account_id: Uuid,
         transfer_id: Uuid,
         amount: i64,
     ) -> Result<(), LedgerError> {
+
+        // update running balance, check constraint fires if balance is negative
         sqlx::query!(
-            "UPDATE accounts SET balance = balance + $1 WHERE id = $2",
+            r#"
+            UPDATE accounts
+            SET    balance = balance + $1
+            WHERE  id = $2
+            "#,
             amount,
             account_id
         )
-        .execute(tx)
-        .await?;
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| {
+            // postgres error code 23514 - check_violation
+            if let sqlx::Error::Database(ref db_err) = e {
+                if db_err.code().as_deref() == Some("23514") {
+                    return LedgerError::InsufficientFunds {
+                        account_id,
+                    };
+                }
+            }
+            LedgerError::Database(e)
+        })?;
+
+
+    // insert ledger entry
         sqlx::query!(
             "INSERT INTO ledger_entries (account_id, amount, transfer_id) VALUES ($1, $2, $3)",
             account_id,
