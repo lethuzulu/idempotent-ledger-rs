@@ -1,4 +1,4 @@
-use crate::{db::Db, error::LedgerError, types::{TransferRequest, TransferResult}};
+use crate::{db::Db, error::LedgerError, types::{TransferRequest}};
 
 
 
@@ -15,9 +15,15 @@ impl Ledger {
 
     pub async fn transfer(&self, req: TransferRequest) -> Result<(), LedgerError> {
 
-        self.db.apply_entry(req.from_account.0, req.transfer_id.0, -req.amount.cents()).await?;
-        self.db.apply_entry(req.to_account.0, req.transfer_id.0, req.amount.cents()).await?; 
+        self.db.with_transaction(|mut tx| async {
+            // debit sender
+            Db::apply_entry(&mut tx, req.from_account.0, req.transfer_id.0, -req.amount.cents()).await?;
 
+            // credit receiver
+            Db::apply_entry(&mut tx, req.to_account.0, req.transfer_id.0, req.amount.cents()).await?; 
+
+            Ok(((), tx))
+        });
         todo!()
     }
 }

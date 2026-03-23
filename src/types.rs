@@ -1,6 +1,5 @@
 use serde::Deserialize;
 use uuid::Uuid;
-use crate::types;
 
 use crate::error::LedgerError;
 
