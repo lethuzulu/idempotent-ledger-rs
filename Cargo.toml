@@ -12,6 +12,7 @@ sqlx = { version = "0.7", features = [
     "chrono",
     "json",
     "migrate",
+    "any"
 ] }
 axum = { version = "0.7", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
