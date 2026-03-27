@@ -14,4 +14,9 @@ pub enum LedgerError {
     #[error("insufficient funds in account {account_id}")]
     InsufficientFunds { account_id: Uuid },
 
+    #[error("invalid idempotency key: must be 1-255 characters")]
+    InvalidIdempotencyKey,
+
+    #[error("serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
 }

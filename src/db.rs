@@ -1,7 +1,7 @@
 use sqlx::{PgPool, Postgres, postgres::PgPoolOptions};
 use uuid::Uuid;
 
-use crate::error::LedgerError;
+use crate::{error::LedgerError, types::{IdempotencyKey, TransferResult}};
 
 use sqlx::Transaction;
 
@@ -88,7 +88,6 @@ impl Db {
         transfer_id: Uuid,
         amount: i64,
     ) -> Result<(), LedgerError> {
-
         // update running balance, check constraint fires if balance is negative
         sqlx::query!(
             r#"
@@ -105,26 +104,46 @@ impl Db {
             // postgres error code 23514 - check_violation
             if let sqlx::Error::Database(ref db_err) = e {
                 if db_err.code().as_deref() == Some("23514") {
-                    return LedgerError::InsufficientFunds {
-                        account_id,
-                    };
+                    return LedgerError::InsufficientFunds { account_id };
                 }
             }
             LedgerError::Database(e)
         })?;
 
-
-    // insert ledger entry
+        // insert ledger entry
         sqlx::query!(
             "INSERT INTO ledger_entries (account_id, amount, transfer_id) VALUES ($1, $2, $3)",
             account_id,
             amount,
             transfer_id
         )
-        .execute(tx)
+        .execute(&mut **tx)
         .await?;
 
-        tx.commit().await?;
         Ok(())
+    }
+}
+
+// Idempotent Key Queries
+impl Db {
+    pub async fn store_idempotency_key(
+        tx: &mut Transaction<'_, Postgres>, key: &IdempotencyKey, result: &TransferResult
+    ) -> Result<(), LedgerError> {
+        let response = serde_json::to_value(result)?;
+
+        sqlx::query!("INSERT INTO idempotency_keys (key, response) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING", key.as_str(), response).execute(&mut **tx).await?;
+        Ok(())
+    }
+
+    pub async fn get_idempotency_key(&self, key: &IdempotencyKey) -> Result<Option<TransferResult>, LedgerError> {
+        let row = sqlx::query!("SELECT response FROM idempotency_keys WHERE key = $1", key.as_str()).fetch_optional(&self.pool).await?;
+
+        match row {
+            None => Ok(None),
+            Some(r) => {
+                let result : TransferResult = serde_json::from_value(r.response)?;
+                Ok(Some(result))
+            }
+        }
     }
 }
