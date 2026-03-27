@@ -1,4 +1,8 @@
-use axum::{http::StatusCode, response::{IntoResponse, Response}, Json};
+use axum::{
+    Json,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -29,7 +33,6 @@ pub enum LedgerError {
     Serialization(#[from] serde_json::Error),
 }
 
-
 impl IntoResponse for LedgerError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
@@ -46,12 +49,10 @@ impl IntoResponse for LedgerError {
             LedgerError::AccountNotFound(_) | LedgerError::TransferNotFound(_) => {
                 (StatusCode::NOT_FOUND, self.to_string())
             }
-            LedgerError::Database(_) | LedgerError::Serialization(_) => {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "internal server error".to_string(),
-                )
-            }
+            LedgerError::Database(_) | LedgerError::Serialization(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal server error".to_string(),
+            ),
         };
 
         (status, Json(json!({ "error": message }))).into_response()

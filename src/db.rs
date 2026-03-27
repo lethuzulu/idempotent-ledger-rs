@@ -1,7 +1,10 @@
 use sqlx::{PgPool, Postgres, postgres::PgPoolOptions};
 use uuid::Uuid;
 
-use crate::{error::LedgerError, types::{IdempotencyKey, TransferResult}};
+use crate::{
+    error::LedgerError,
+    types::{IdempotencyKey, TransferResult},
+};
 
 use sqlx::Transaction;
 
@@ -127,7 +130,9 @@ impl Db {
 // Idempotent Key Queries
 impl Db {
     pub async fn store_idempotency_key(
-        tx: &mut Transaction<'_, Postgres>, key: &IdempotencyKey, result: &TransferResult
+        tx: &mut Transaction<'_, Postgres>,
+        key: &IdempotencyKey,
+        result: &TransferResult,
     ) -> Result<(), LedgerError> {
         let response = serde_json::to_value(result)?;
 
@@ -135,13 +140,21 @@ impl Db {
         Ok(())
     }
 
-    pub async fn get_idempotency_key(&self, key: &IdempotencyKey) -> Result<Option<TransferResult>, LedgerError> {
-        let row = sqlx::query!("SELECT response FROM idempotency_keys WHERE key = $1", key.as_str()).fetch_optional(&self.pool).await?;
+    pub async fn get_idempotency_key(
+        &self,
+        key: &IdempotencyKey,
+    ) -> Result<Option<TransferResult>, LedgerError> {
+        let row = sqlx::query!(
+            "SELECT response FROM idempotency_keys WHERE key = $1",
+            key.as_str()
+        )
+        .fetch_optional(&self.pool)
+        .await?;
 
         match row {
             None => Ok(None),
             Some(r) => {
-                let result : TransferResult = serde_json::from_value(r.response)?;
+                let result: TransferResult = serde_json::from_value(r.response)?;
                 Ok(Some(result))
             }
         }

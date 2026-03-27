@@ -15,45 +15,49 @@ impl LedgerService {
     }
 
     pub async fn transfer(&self, req: TransferRequest) -> Result<TransferResult, LedgerError> {
-
-        if let Some(cached) =  self.db.get_idempotency_key(&req.idempotency_key).await? {
+        if let Some(cached) = self.db.get_idempotency_key(&req.idempotency_key).await? {
+            tracing::info!(
+                key = %req.idempotency_key,
+                "replaying cached transfer result"
+            );
             return Ok(cached);
         }
 
+        self.db
+            .with_transaction(|mut tx| async {
+                // lock accounts in consustent uuid order to prevent deadlock
+                Db::lock_accounts(&mut tx, req.from_account.0, req.to_account.0).await?;
 
-        self.db.with_transaction(|mut tx| async {
-            // lock accounts in consustent uuid order to prevent deadlock
-            Db::lock_accounts(&mut tx, req.from_account.0, req.to_account.0).await?;
+                // debit sender
+                Db::apply_entry(
+                    &mut tx,
+                    req.from_account.0,
+                    req.transfer_id.0,
+                    -req.amount.cents(),
+                )
+                .await?;
 
-            // debit sender
-            Db::apply_entry(
-                &mut tx,
-                req.from_account.0,
-                req.transfer_id.0,
-                -req.amount.cents(),
-            )
+                // credit receiver
+                Db::apply_entry(
+                    &mut tx,
+                    req.to_account.0,
+                    req.transfer_id.0,
+                    req.amount.cents(),
+                )
+                .await?;
+
+                let result = TransferResult {
+                    from_account: req.from_account,
+                    to_account: req.to_account,
+                    amount: req.amount,
+                };
+
+                // strore idempotency key with the ledger entries atomically
+                Db::store_idempotency_key(&mut tx, &req.idempotency_key, &result).await?;
+
+                Ok((result, tx))
+            })
             .await?;
-
-            // credit receiver
-            Db::apply_entry(
-                &mut tx,
-                req.to_account.0,
-                req.transfer_id.0,
-                req.amount.cents(),
-            )
-            .await?;
-
-            let result = TransferResult {
-                from_account: req.from_account,
-                to_account: req.to_account,
-                amount: req.amount,
-            };
-
-            // strore idempotency key with the ledger entries atomically
-            Db::store_idempotency_key(&mut tx, &req.idempotency_key, &result).await?;
-
-            Ok((result, tx))
-        }).await?;
         todo!()
     }
 
