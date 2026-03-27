@@ -4,12 +4,12 @@ use crate::{
     types::{AccountId, TransferRequest, TransferResult},
 };
 
-#[derive(Debug)]
-pub struct Ledger {
+#[derive(Debug, Clone)]
+pub struct LedgerService {
     db: Db,
 }
 
-impl Ledger {
+impl LedgerService {
     pub fn new(db: Db) -> Self {
         Self { db }
     }

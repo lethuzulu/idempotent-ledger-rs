@@ -5,7 +5,7 @@ use crate::{error::LedgerError, types::{IdempotencyKey, TransferResult}};
 
 use sqlx::Transaction;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Db {
     pool: PgPool,
 }
