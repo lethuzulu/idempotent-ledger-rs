@@ -129,7 +129,7 @@ impl Db {
 
 // Idempotent Key Queries
 impl Db {
-    pub async fn store_idempotency_key(
+    pub async fn cache_result(
         tx: &mut Transaction<'_, Postgres>,
         key: &IdempotencyKey,
         result: &TransferResult,
@@ -140,7 +140,7 @@ impl Db {
         Ok(())
     }
 
-    pub async fn get_idempotency_key(
+    pub async fn get_cached_result(
         &self,
         key: &IdempotencyKey,
     ) -> Result<Option<TransferResult>, LedgerError> {

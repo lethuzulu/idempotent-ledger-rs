@@ -15,11 +15,8 @@ impl LedgerService {
     }
 
     pub async fn transfer(&self, req: TransferRequest) -> Result<TransferResult, LedgerError> {
-        if let Some(cached) = self.db.get_idempotency_key(&req.idempotency_key).await? {
-            tracing::info!(
-                key = %req.idempotency_key,
-                "replaying cached transfer result"
-            );
+        if let Some(cached) = self.db.get_cached_result(&req.idempotency_key).await? {
+            tracing::info!(key = %req.idempotency_key,"replaying cached transfer result");
             return Ok(cached);
         }
 
@@ -50,15 +47,15 @@ impl LedgerService {
                     from_account: req.from_account,
                     to_account: req.to_account,
                     amount: req.amount,
+                    transfer_id: req.transfer_id,
                 };
 
                 // strore idempotency key with the ledger entries atomically
-                Db::store_idempotency_key(&mut tx, &req.idempotency_key, &result).await?;
+                Db::cache_result(&mut tx, &req.idempotency_key, &result).await?;
 
                 Ok((result, tx))
             })
-            .await?;
-        todo!()
+            .await
     }
 
     pub async fn get_balance(&self, account_id: AccountId) -> Result<i64, LedgerError> {
