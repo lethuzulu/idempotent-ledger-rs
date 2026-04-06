@@ -10,7 +10,7 @@ use sqlx::Transaction;
 
 #[derive(Debug, Clone)]
 pub struct Db {
-    pool: PgPool,
+    pub pool: PgPool,
 }
 
 impl Db {
@@ -39,12 +39,7 @@ impl Db {
         F: FnOnce(Transaction<'a, Postgres>) -> Fut,
         Fut: Future<Output = Result<(T, Transaction<'a, Postgres>), LedgerError>>,
     {
-        let mut tx = self.pool.begin().await?;
-
-        // set SERIALIZABLE isolation for the transaction
-        sqlx::query("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
-            .execute(&mut *tx)
-            .await?;
+        let tx = self.pool.begin().await?;
 
         let (result, tx) = f(tx).await?;
 
@@ -141,14 +136,14 @@ impl Db {
     }
 
     pub async fn get_cached_result(
-        &self,
+        tx: &mut Transaction<'_, Postgres>,
         key: &IdempotencyKey,
     ) -> Result<Option<TransferResult>, LedgerError> {
         let row = sqlx::query!(
             "SELECT response FROM idempotency_keys WHERE key = $1",
             key.as_str()
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut **tx)
         .await?;
 
         match row {

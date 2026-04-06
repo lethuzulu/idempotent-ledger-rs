@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::error::LedgerError;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(transparent)]
 pub struct IdempotencyKey(String);
 
@@ -27,7 +27,7 @@ impl std::fmt::Display for IdempotencyKey {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug,Clone, Copy, Deserialize, Serialize)]
 #[serde(transparent)]
 pub struct Money(i64);
 
@@ -65,10 +65,10 @@ pub struct TransferResult {
     pub transfer_id: TransferId,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, Hash, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct AccountId(pub Uuid);
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, Hash, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct TransferId(pub Uuid);

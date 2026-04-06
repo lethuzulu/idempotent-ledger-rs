@@ -15,15 +15,16 @@ impl LedgerService {
     }
 
     pub async fn transfer(&self, req: TransferRequest) -> Result<TransferResult, LedgerError> {
-        if let Some(cached) = self.db.get_cached_result(&req.idempotency_key).await? {
-            tracing::info!(key = %req.idempotency_key,"replaying cached transfer result");
-            return Ok(cached);
-        }
-
         self.db
             .with_transaction(|mut tx| async {
                 // lock accounts in consustent uuid order to prevent deadlock
                 Db::lock_accounts(&mut tx, req.from_account.0, req.to_account.0).await?;
+
+                // check idempotency key INSIDE the transaction, AFTER locking
+                if let Some(cached) = Db::get_cached_result(&mut tx, &req.idempotency_key).await? {
+                    tracing::info!(key = %req.idempotency_key, "replaying cached transfer result (in-tx)");
+                    return Ok((cached, tx));
+                }
 
                 // debit sender
                 Db::apply_entry(
