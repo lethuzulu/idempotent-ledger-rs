@@ -8,7 +8,7 @@ use idempotent_ledger_rs::{
     db::Db,
     error::LedgerError,
     ledger::LedgerService,
-    types::{TransferRequest, TransferResult},
+    types::{TransferId, TransferRequest, TransferResult},
 };
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -33,6 +33,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/transfers", post(transfer_handler))
+        .route("/transfers/:id", get(get_transfer_handler))
         .route("/accounts/:id/balance", get(balance_handler))
         .with_state(ledger);
 
@@ -60,4 +61,12 @@ async fn balance_handler(
     Ok(Json(
         serde_json::json!({ "account_id": id, "balance_cents": balance }),
     ))
+}
+
+async fn get_transfer_handler(
+    State(ledger): State<LedgerService>,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+) -> Result<Json<TransferResult>, LedgerError> {
+    let result = ledger.get_transfer(TransferId(id)).await?;
+    Ok(Json(result))
 }

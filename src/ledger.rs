@@ -1,7 +1,7 @@
 use crate::{
     db::Db,
     error::LedgerError,
-    types::{AccountId, TransferRequest, TransferResult},
+    types::{AccountId, TransferId, TransferRequest, TransferResult},
 };
 
 #[derive(Debug, Clone)]
@@ -61,5 +61,9 @@ impl LedgerService {
 
     pub async fn get_balance(&self, account_id: AccountId) -> Result<i64, LedgerError> {
         self.db.get_balance(account_id.0).await
+    }
+
+    pub async fn get_transfer(&self, transfer_id: TransferId) -> Result<TransferResult, LedgerError> {
+        self.db.get_transfer(transfer_id.0).await
     }
 }

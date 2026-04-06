@@ -12,17 +12,23 @@ async fn setup() -> (LedgerService, AccountId, AccountId) {
     let db = idempotent_ledger_rs::db::Db::new(&url).await.unwrap();
     db.migrate().await.unwrap();
 
+    // wipe all data before each test so runs are fully isolated
+    sqlx::query!("TRUNCATE TABLE idempotency_keys, ledger_entries, accounts RESTART IDENTITY CASCADE")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
     // create two test accounts with known starting balances
     let alice = sqlx::query_scalar!(
         "INSERT INTO accounts (owner, balance) VALUES ('alice', 10000) RETURNING id"
     )
-    .fetch_one(&db.pool)
+    .fetch_one(db.pool())
     .await
     .unwrap();
 
     let bob =
         sqlx::query_scalar!("INSERT INTO accounts (owner, balance) VALUES ('bob', 0) RETURNING id")
-            .fetch_one(&db.pool)
+            .fetch_one(db.pool())
             .await
             .unwrap();
 

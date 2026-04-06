@@ -3,14 +3,14 @@ use uuid::Uuid;
 
 use crate::{
     error::LedgerError,
-    types::{IdempotencyKey, TransferResult},
+    types::{AccountId, IdempotencyKey, Money, TransferId, TransferResult},
 };
 
 use sqlx::Transaction;
 
 #[derive(Debug, Clone)]
 pub struct Db {
-    pub pool: PgPool,
+    pool: PgPool,
 }
 
 impl Db {
@@ -20,6 +20,10 @@ impl Db {
             .connect(database_url)
             .await?;
         Ok(Self { pool })
+    }
+
+    pub fn pool(&self) -> &PgPool {
+        &self.pool
     }
 
     // Run pending migrations from the ./migrations directory.
@@ -119,6 +123,36 @@ impl Db {
         .await?;
 
         Ok(())
+    }
+
+    // Fetch both legs of a transfer (debit + credit) by transfer_id.
+    pub async fn get_transfer(&self, transfer_id: Uuid) -> Result<TransferResult, LedgerError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT account_id, amount
+            FROM   ledger_entries
+            WHERE  transfer_id = $1
+            ORDER  BY amount ASC
+            "#,
+            transfer_id
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        // expect exactly two rows: debit (negative) and credit (positive)
+        if rows.len() != 2 {
+            return Err(LedgerError::TransferNotFound(transfer_id));
+        }
+
+        let debit  = &rows[0];
+        let credit = &rows[1];
+
+        Ok(TransferResult {
+            transfer_id: TransferId(transfer_id),
+            from_account: AccountId(debit.account_id),
+            to_account:   AccountId(credit.account_id),
+            amount:       Money::from_cents(credit.amount)?,
+        })
     }
 }
 
