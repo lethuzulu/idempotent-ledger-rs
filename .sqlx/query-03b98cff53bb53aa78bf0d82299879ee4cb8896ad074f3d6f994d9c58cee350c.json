@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE accounts\n            SET    balance = balance + $1\n            WHERE  id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "03b98cff53bb53aa78bf0d82299879ee4cb8896ad074f3d6f994d9c58cee350c"
+}
